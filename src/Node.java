@@ -19,6 +19,7 @@ public abstract class Node {
 
 
     public abstract void onReceipt(DatagramPacket packet);
+    //public abstract void userInput(String message);
 
     /**
      *
@@ -50,5 +51,16 @@ public abstract class Node {
                 }
             } catch (Exception e) {if (!(e instanceof SocketException)) e.printStackTrace();}
         }
+
+/*        public void userInput(String userMessage){
+            while (true){
+                Scanner input = new Scanner(System.in);
+                userMessage = input.next();
+                if (!userMessage.equals(null)) {
+                    System.out.println("YELLOOOO");
+                    userInput(userMessage);
+                }
+            }
+        }*/
     }
 }

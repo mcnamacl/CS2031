@@ -6,11 +6,8 @@ import java.util.*;
 
 public class Broker extends Node {
     static final int DEFAULT_PORT = 50001;
-    static final int DEFAULT_SRC_PORT = 50000;
-    static final int DEFAULT_DST_PORT = 50001;
-    static final String DEFAULT_DST_NODE = "localhost";
 
-    Hashtable<String, List<SocketAddress>> subscriberList = new Hashtable<>();
+    HashMap<String, List<SocketAddress>> subscriberList = new HashMap<>();
 
     Broker( int port) {
         try {
@@ -23,17 +20,35 @@ public class Broker extends Node {
     public synchronized void onReceipt(DatagramPacket packet) {
         try {
             byte[] data= packet.getData();
-            byte[] stbuffer= new byte[data[10]];
-            for(int i=0;i<stbuffer.length;i++){stbuffer[i]=data[10+i+1];}
-            String topic = new String(stbuffer);
+            byte[] topicBuffer= new byte[data[10]];
             boolean receivedCorrectly = false;
+            String topic;
             switch(data[0]) {
                 case 0: //Subscription
+                    for(int i=0;i<topicBuffer.length;i++){topicBuffer[i]=data[10+i+1];}
+                    topic = new String(topicBuffer);
                     handleSubscription(packet, topic);
+                    System.out.println("New subscription to " + topic);
                     receivedCorrectly = true;
                     break;
                 case 1: //Publication
-                    handlePublication(packet, topic);
+                    for(int i=0;i<topicBuffer.length;i++){topicBuffer[i]=data[11+i+1];}
+                    topic = new String(topicBuffer);
+                    byte[] msgBuffer = new byte[data[11]];
+                    for (int i = 0; i < msgBuffer.length; i++){msgBuffer[i]=data[11 + topicBuffer.length + i + 1];}
+                    handlePublication(topic, msgBuffer);
+                    System.out.println("New publication to " + topic);
+                    receivedCorrectly = true;
+                    break;
+                case 3: //unsub
+                    for(int i=0;i<topicBuffer.length;i++){topicBuffer[i]=data[10+i+1];}
+                    topic = new String(topicBuffer);
+                    List<SocketAddress> currentTopicSubs = subscriberList.get(topic);
+                    for (int i = 0; i < currentTopicSubs.size(); i++){
+                        if(currentTopicSubs.get(i).equals(packet.getSocketAddress())){
+                            currentTopicSubs.remove(currentTopicSubs.get(i));
+                        }
+                    }
                     receivedCorrectly = true;
                     break;
             }
@@ -55,14 +70,12 @@ public class Broker extends Node {
                 response.setSocketAddress(packet.getSocketAddress());
                 socket.send(response);
             }
-            //this.notify();
         }
         catch(Exception e) {e.printStackTrace();}
     }
 
     public void handleSubscription(DatagramPacket packet, String topic){
-        if (!subscriberList.contains(topic)) {
-            System.out.println(topic);
+        if (!subscriberList.containsKey(topic)) {
             List<SocketAddress> subscriber = new ArrayList<>();
             subscriber.add(packet.getSocketAddress());
             subscriberList.put(topic, subscriber);
@@ -74,15 +87,21 @@ public class Broker extends Node {
         }
     }
 
-    public void handlePublication(DatagramPacket packet, String topic) throws IOException {
-            if (subscriberList.contains(topic)){
-                DatagramPacket message;
-                message = new DatagramPacket(packet.getData(), packet.getLength());
+    public void handlePublication(String topic, byte[] message) throws IOException {
+            if (subscriberList.get(topic) != null){
+                byte[] topicToSend = (topic + " : ").getBytes();
+                byte[] messageToSend = new byte[topicToSend.length + message.length];
+                for (int i = 0; i < topicToSend.length; i++){messageToSend[i] = topicToSend[i];}
+                for (int i = 0; i < message.length; i++){messageToSend[topicToSend.length + i] = message[i];}
+                DatagramPacket messagePacket = new DatagramPacket(messageToSend, messageToSend.length);
                 List<SocketAddress> subscribers = subscriberList.get(topic);
                 for (int i = 0; i < subscribers.size(); i++){
-                    message.setSocketAddress(subscribers.get(i));
-                    socket.send(message);
+                    messagePacket.setSocketAddress(subscribers.get(i));
+                    socket.send(messagePacket);
                 }
+            }
+            else {
+                System.out.println("Sorry, there are no subscribers currently for this topic");
             }
     }
 
@@ -100,19 +119,6 @@ public class Broker extends Node {
         try {
             Broker broker = new Broker(DEFAULT_PORT);
             broker.start();
-           /* List<Subscriber> subscribers = new ArrayList<Subscriber>();
-            boolean finished = false;
-            while (!finished) {
-                System.out.println("what topic are you interested in");
-                Scanner input = new Scanner(System.in);
-                if (input.hasNext()) {
-                    String topic = input.next();
-                    Subscriber sub = new Subscriber(DEFAULT_DST_NODE, DEFAULT_DST_PORT, DEFAULT_SRC_PORT, topic);
-                    subscribers.add(sub);
-                    sub.run();
-                    //Subscriber sub1 = new Subscriber();
-                }
-            }*/
             System.out.println("Program completed");
         } catch(java.lang.Exception e) {e.printStackTrace();}
     }
