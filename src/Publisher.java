@@ -7,10 +7,9 @@ import java.util.Scanner;
 
 /**
  * Client class
- * <p>
  * An instance accepts user input
  */
-public class Publisher extends Node implements Runnable {//65,535 ((Math.random() * ((65535 - 1024) + 1) + 1024));
+public class Publisher extends Node implements Runnable {
     static final int DEFAULT_SRC_PORT = (int) ((Math.random() * ((65535 - 1024) + 1) + 1024));
     static final int DEFAULT_DST_PORT = 50001;
     static final String DEFAULT_DST_NODE = "localhost";
@@ -18,6 +17,10 @@ public class Publisher extends Node implements Runnable {//65,535 ((Math.random(
     InetSocketAddress dstAddress;
     String topic;
     String message;
+
+    static final int TYPE_OF_PACKET_POS = 0;
+    static final int TOPIC_LENGTH_POS = 1;
+    static final int MSG_LENGTH_POS = 2;
 
     /**
      * Constructor
@@ -52,15 +55,15 @@ public class Publisher extends Node implements Runnable {//65,535 ((Math.random(
             message = input.nextLine();
             byte[] topicBytes = topic.getBytes();
             byte[] msgBytes = message.getBytes();
-            byte[] buffer = new byte[11 + msgBytes.length + topicBytes.length + 1];
-            buffer[10] = (byte) topicBytes.length;
-            buffer[11] = (byte) msgBytes.length;
-            buffer[0] = (byte) 1;
+            byte[] buffer = new byte[TOPIC_LENGTH_POS + 1 + msgBytes.length + topicBytes.length + 1];
+            buffer[TOPIC_LENGTH_POS] = (byte) topicBytes.length;
+            buffer[MSG_LENGTH_POS] = (byte) msgBytes.length;
+            buffer[TYPE_OF_PACKET_POS] = (byte) 1;
             for (int i = 0; i < topicBytes.length; i++) {
-                buffer[11 + i + 1] = topicBytes[i];
+                buffer[TOPIC_LENGTH_POS + 1 + i + 1] = topicBytes[i];
             }
             for (int i = 0; i < msgBytes.length; i++) {
-                buffer[11 + topicBytes.length + 1 + i] = msgBytes[i];
+                buffer[MSG_LENGTH_POS + topicBytes.length + 1 + i] = msgBytes[i];
             }
             System.out.println("Sending packet...");
             packet = new DatagramPacket(buffer, buffer.length, dstAddress);
@@ -80,19 +83,20 @@ public class Publisher extends Node implements Runnable {//65,535 ((Math.random(
         DatagramPacket packet;
         byte[] msgBytes = message.getBytes();
         byte[] topicBytes = topic.getBytes();
-        byte[] buffer = new byte[11 + msgBytes.length + topicBytes.length + 1];
-        buffer[10] = (byte) topicBytes.length;
-        buffer[11] = (byte) msgBytes.length;
-        buffer[0] = (byte) 1;
+        byte[] buffer = new byte[1 + 1 + msgBytes.length + topicBytes.length + 1];
+        buffer[TOPIC_LENGTH_POS] = (byte) topicBytes.length;
+        buffer[MSG_LENGTH_POS] = (byte) msgBytes.length;
+        buffer[TYPE_OF_PACKET_POS] = (byte) 1;
         for (int i = 0; i < topicBytes.length; i++) {
-            buffer[11 + i + 1] = topicBytes[i];
+            buffer[TOPIC_LENGTH_POS + 1 + i + 1] = topicBytes[i];
         }
         for (int i = 0; i < msgBytes.length; i++) {
-            buffer[11 + topicBytes.length + 1 + i] = msgBytes[i];
+            buffer[MSG_LENGTH_POS + topicBytes.length + 1 + i] = msgBytes[i];
         }
         System.out.println("Sending packet...");
         packet = new DatagramPacket(buffer, buffer.length, dstAddress);
         try {
+            System.out.println(new String(buffer));
             socket.send(packet);
             System.out.println("Packet sent");
             this.wait();
@@ -109,10 +113,11 @@ public class Publisher extends Node implements Runnable {//65,535 ((Math.random(
 //	 * Sends a packet to a given address
 //	 */
     public static void main(String[] args) throws BindException {
-        System.out.println("what topic are you interested in");
+        System.out.println("What topic would you like to publish to?");
         Scanner input = new Scanner(System.in);
         if (input.hasNext()) {
             String topic = input.nextLine();
+            System.out.println("What message would you like to publish?");
             if (input.hasNext()) {
                 String message = input.nextLine();
                 Thread pub = new Thread(new Publisher(DEFAULT_DST_NODE, DEFAULT_DST_PORT, DEFAULT_SRC_PORT, topic, message));

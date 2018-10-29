@@ -7,6 +7,10 @@ import java.util.*;
 public class Broker extends Node {
     static final int DEFAULT_PORT = 50001;
 
+    static final int TYPE_OF_PACKET_POS = 0;
+    static final int TOPIC_LENGTH_POS = 1;
+    static final int MSG_LENGTH_POS = 2;
+
     HashMap<String, List<SocketAddress>> subscriberList = new HashMap<>();
 
     Broker( int port) {
@@ -20,28 +24,28 @@ public class Broker extends Node {
     public synchronized void onReceipt(DatagramPacket packet) {
         try {
             byte[] data= packet.getData();
-            byte[] topicBuffer= new byte[data[10]];
+            byte[] topicBuffer= new byte[data[TOPIC_LENGTH_POS]];
             boolean receivedCorrectly = false;
             String topic;
-            switch(data[0]) {
+            switch(data[TYPE_OF_PACKET_POS]) {
                 case 0: //Subscription
-                    for(int i=0;i<topicBuffer.length;i++){topicBuffer[i]=data[10+i+1];}
+                    for(int i=0;i<topicBuffer.length;i++){topicBuffer[i]=data[TOPIC_LENGTH_POS+i+1];}
                     topic = new String(topicBuffer);
                     handleSubscription(packet, topic);
                     System.out.println("New subscription to " + topic);
                     receivedCorrectly = true;
                     break;
                 case 1: //Publication
-                    for(int i=0;i<topicBuffer.length;i++){topicBuffer[i]=data[11+i+1];}
+                    for(int i=0;i<topicBuffer.length;i++){topicBuffer[i]=data[MSG_LENGTH_POS+i+1];}
                     topic = new String(topicBuffer);
-                    byte[] msgBuffer = new byte[data[11]];
-                    for (int i = 0; i < msgBuffer.length; i++){msgBuffer[i]=data[11 + topicBuffer.length + i + 1];}
+                    byte[] msgBuffer = new byte[data[MSG_LENGTH_POS]];
+                    for (int i = 0; i < msgBuffer.length; i++){msgBuffer[i]=data[MSG_LENGTH_POS + topicBuffer.length + i + 1];}
                     handlePublication(topic, msgBuffer);
                     System.out.println("New publication to " + topic);
                     receivedCorrectly = true;
                     break;
                 case 3: //unsub
-                    for(int i=0;i<topicBuffer.length;i++){topicBuffer[i]=data[10+i+1];}
+                    for(int i=0;i<topicBuffer.length;i++){topicBuffer[i]=data[TOPIC_LENGTH_POS+i+1];}
                     topic = new String(topicBuffer);
                     List<SocketAddress> currentTopicSubs = subscriberList.get(topic);
                     for (int i = 0; i < currentTopicSubs.size(); i++){

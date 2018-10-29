@@ -8,7 +8,6 @@ import java.util.*;
 
 /**
  * Client class
- * <p>
  * An instance accepts user input
  */
 public class Subscriber extends Node implements Runnable {
@@ -16,13 +15,19 @@ public class Subscriber extends Node implements Runnable {
     static final int DEFAULT_DST_PORT = 50001;
     static final String DEFAULT_DST_NODE = "localhost";
 
+    static final int TYPE_OF_PACKET_POS = 0;
+    static final int TOPIC_LENGTH_POS = 1;
+
+    static final int UN_SUB = 3;
+    static final int SUB = 0;
+
+
     List<String> topics = new ArrayList<String>();
     InetSocketAddress dstAddress;
     boolean ended = false;
 
     /**
      * Constructor
-     * <p>
      * Attempts to create socket at given port and create an InetSocketAddress for
      * the destinations
      */
@@ -48,7 +53,7 @@ public class Subscriber extends Node implements Runnable {
             String content = new String(data);
             System.out.println(content);
             System.out.println("to unsubscribe press 1, to subscriber to a new topic press 2, to see a list of all topics" +
-                    "you are currently subscribed to press 3, else press 0");
+                    " you are currently subscribed to press 3, else press 0");
             Scanner input = new Scanner(System.in);
             if (input.hasNext("1")) {
                 System.out.println("Which topic would you like to unsubscribe from?");
@@ -85,35 +90,32 @@ public class Subscriber extends Node implements Runnable {
         byte[] topicBytes = topic.getBytes();
         try {
             byte[] unSub = new byte[1 + topicBytes.length + 10];
-            unSub[10] = (byte) topicBytes.length;
-            unSub[0] = 3;
+            unSub[TOPIC_LENGTH_POS] = (byte) topicBytes.length;
+            unSub[TYPE_OF_PACKET_POS] = UN_SUB;
             for (int i = 0; i < topicBytes.length; i++) {
-                unSub[10 + i + 1] = topicBytes[i];
+                unSub[TOPIC_LENGTH_POS + i + 1] = topicBytes[i];
             }
             DatagramPacket packet = new DatagramPacket(unSub, unSub.length, dstAddress);
             socket.send(packet);
         } catch (IOException e) {
             e.printStackTrace();
         }
-        System.out.println("you have unsubscribed from " + topic + " please type in a new topic to subscribe" +
-                " to else type end");
+        System.out.println("you have unsubscribed from " + topic + " if you would like to end all subscriptions " +
+                " type end else just click enter");
         Scanner scanner = new Scanner(System.in);
         if (scanner.hasNext("end")) {
             ended = true;
             this.notify();
-        } else {
-            topic = scanner.next();
-            subToNewTopic(topic.getBytes());
         }
     }
 
     public void subToNewTopic(byte[] topicBytes){
         topics.add(new String(topicBytes));
-        byte[] buffer = new byte[10 + topicBytes.length + 1];
-        buffer[0] = (byte) 0;
-        buffer[10] = (byte) topicBytes.length;
+        byte[] buffer = new byte[TOPIC_LENGTH_POS + topicBytes.length + 1];
+        buffer[TYPE_OF_PACKET_POS] = (byte) SUB;
+        buffer[TOPIC_LENGTH_POS] = (byte) topicBytes.length;
         for (int i = 0; i < topicBytes.length; i++) {
-            buffer[10 + i + 1] = topicBytes[i];
+            buffer[TOPIC_LENGTH_POS + i + 1] = topicBytes[i];
         }
         System.out.println("Sending packet...");
         DatagramPacket packet = new DatagramPacket(buffer, buffer.length, dstAddress);
@@ -131,11 +133,11 @@ public class Subscriber extends Node implements Runnable {
     public synchronized void run() {
         DatagramPacket packet;
         byte[] topicBytes = topics.get(0).getBytes();
-        byte[] buffer = new byte[10 + topicBytes.length + 1];
-        buffer[0] = (byte) 0;
-        buffer[10] = (byte) topicBytes.length;
+        byte[] buffer = new byte[TOPIC_LENGTH_POS + topicBytes.length + 1];
+        buffer[TYPE_OF_PACKET_POS] = (byte) SUB;
+        buffer[TOPIC_LENGTH_POS] = (byte) topicBytes.length;
         for (int i = 0; i < topicBytes.length; i++) {
-            buffer[10 + i + 1] = topicBytes[i];
+            buffer[TOPIC_LENGTH_POS + i + 1] = topicBytes[i];
         }
         System.out.println("Sending packet...");
         packet = new DatagramPacket(buffer, buffer.length, dstAddress);
