@@ -1,4 +1,3 @@
-import javax.xml.crypto.Data;
 import java.io.IOException;
 import java.net.BindException;
 import java.net.DatagramSocket;
@@ -6,10 +5,6 @@ import java.net.DatagramPacket;
 import java.net.InetSocketAddress;
 import java.util.*;
 
-/**
- * Client class
- * An instance accepts user input
- */
 public class Subscriber extends Node implements Runnable {
     static final int DEFAULT_SRC_PORT = (int) ((Math.random() * ((65535 - 1024) + 1) + 1024));
     static final int DEFAULT_DST_PORT = 50001;
@@ -21,62 +16,50 @@ public class Subscriber extends Node implements Runnable {
     static final int UN_SUB = 3;
     static final int SUB = 0;
 
-
-    List<String> topics = new ArrayList<String>();
+    List<String> topics = new ArrayList<>();
     InetSocketAddress dstAddress;
     boolean ended = false;
 
-    /**
-     * Constructor
-     * Attempts to create socket at given port and create an InetSocketAddress for
-     * the destinations
-     */
     Subscriber(String dstHost, int dstPort, int srcPort, String topic) {
         try {
             dstAddress = new InetSocketAddress(dstHost, dstPort);
             socket = new DatagramSocket(srcPort);
             listener.go();
+            inputListener.start();
             topics.add(topic);
-            //listener.userInput(null);
         } catch (java.lang.Exception e) {
             e.printStackTrace();
         }
     }
 
-    /**
-     * Assume that incoming packets contain a String and print the string.
-     */
     public synchronized void onReceipt(DatagramPacket packet) {
+        byte[] data;
+        data = packet.getData();
+        String content = new String(data);
+        System.out.println(content);
+    }
+
+    @Override
+    public void userInput(String message) {
         if (!ended) {
-            byte[] data;
-            data = packet.getData();
-            String content = new String(data);
-            System.out.println(content);
-            System.out.println("to unsubscribe press 1, to subscriber to a new topic press 2, to see a list of all topics" +
-                    " you are currently subscribed to press 3, else press 0");
-            Scanner input = new Scanner(System.in);
-            if (input.hasNext("1")) {
+            if (message.equals("1")) {
                 System.out.println("Which topic would you like to unsubscribe from?");
-                input = new Scanner(System.in);
+                Scanner input = new Scanner(System.in);
                 if (input.hasNext()) {
-                    String message = input.next();
+                    message = input.next();
                     unSub(message);
                 }
-            }
-            else if (input.hasNext("2")){
+            } else if (message.equals("2")) {
                 System.out.println("What topic would you also like to subscribe to?");
-                input = new Scanner(System.in);
+                Scanner input = new Scanner(System.in);
                 if (input.hasNext()) {
                     String topic = input.next();
-                    topics.add(topic);
                     subToNewTopic(topic.getBytes());
                 }
-            }
-            else if (input.hasNext("3")){
-                if (topics.size()==0){
+            } else if (message.equals("3")) {
+                if (topics.size() == 0) {
                     System.out.println("You are not currently subscribed to any topics");
-                }
-                else {
+                } else {
                     for (int i = 0; i < topics.size(); i++) {
                         System.out.println(topics.get(i));
                     }
@@ -109,7 +92,7 @@ public class Subscriber extends Node implements Runnable {
         }
     }
 
-    public void subToNewTopic(byte[] topicBytes){
+    public void subToNewTopic(byte[] topicBytes) {
         topics.add(new String(topicBytes));
         byte[] buffer = new byte[TOPIC_LENGTH_POS + topicBytes.length + 1];
         buffer[TYPE_OF_PACKET_POS] = (byte) SUB;
@@ -127,9 +110,6 @@ public class Subscriber extends Node implements Runnable {
         }
     }
 
-    /**
-     * Sender Method
-     */
     public synchronized void run() {
         DatagramPacket packet;
         byte[] topicBytes = topics.get(0).getBytes();
@@ -151,11 +131,6 @@ public class Subscriber extends Node implements Runnable {
         }
     }
 
-    //	/**
-//	 * Test method
-//	 *
-//	 * Sends a packet to a given address
-//	 */
     public static void main(String[] args) throws BindException {
         System.out.println("What topic do you want to subscribe to?");
         Scanner input = new Scanner(System.in);

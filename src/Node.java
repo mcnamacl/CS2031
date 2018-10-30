@@ -1,3 +1,5 @@
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketException;
@@ -8,23 +10,24 @@ public abstract class Node {
 
     DatagramSocket socket;
     Listener listener;
+    InputListener inputListener = new InputListener();
     CountDownLatch latch;
 
     Node() {
-        latch= new CountDownLatch(1);
-        listener= new Listener();
+        latch = new CountDownLatch(1);
+        listener = new Listener();
         listener.setDaemon(true);
         listener.start();
     }
 
 
     public abstract void onReceipt(DatagramPacket packet);
-    //public abstract void userInput(String message);
+
+    public abstract void userInput(String message);
 
     /**
-     *
      * Listener thread
-     *
+     * <p>
      * Listens for incoming packets on a datagram socket and informs registered receivers about incoming packets.
      */
     class Listener extends Thread {
@@ -43,24 +46,31 @@ public abstract class Node {
             try {
                 latch.await();
                 // Endless loop: attempt to receive packet, notify receivers, etc
-                while(true) {
+                while (true) {
                     DatagramPacket packet = new DatagramPacket(new byte[PACKETSIZE], PACKETSIZE);
                     socket.receive(packet);
 
                     onReceipt(packet);
                 }
-            } catch (Exception e) {if (!(e instanceof SocketException)) e.printStackTrace();}
+            } catch (Exception e) {
+                if (!(e instanceof SocketException)) e.printStackTrace();
+            }
         }
+    }
 
-/*        public void userInput(String userMessage){
-            while (true){
-                Scanner input = new Scanner(System.in);
-                userMessage = input.next();
-                if (!userMessage.equals(null)) {
-                    System.out.println("YELLOOOO");
-                    userInput(userMessage);
+    class InputListener extends Thread {
+
+        BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+
+        public void run() {
+            String msg;
+            while (true) {
+                try {
+                    msg = in.readLine();
+                    userInput(msg);
+                } catch (Exception e) {
                 }
             }
-        }*/
+        }
     }
 }
