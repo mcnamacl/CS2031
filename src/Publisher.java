@@ -19,6 +19,13 @@ public class Publisher extends Node implements Runnable {
     static final int TYPE_OF_PACKET_POS = 0;
     static final int TOPIC_LENGTH_POS = 1;
     static final int MSG_LENGTH_POS = 2;
+    static final int REQUEST_POS = 3;
+
+    static final int DATA_BEGIN_POS = 10;
+
+    static final int TYPE_OF_PACKET = 1;
+    static final int SENDING_ALL_PUBLICATIONS = 3;
+    static final int REQUEST = 3;
 
     List<DatagramPacket> packetsSent = new ArrayList<>();
 
@@ -38,28 +45,43 @@ public class Publisher extends Node implements Runnable {
     public synchronized void onReceipt(DatagramPacket packet) {
         byte[] data;
         data = packet.getData();
-        String content = new String(data);
-        System.out.println(content);
-        System.out.println("type another message");
+        DatagramPacket prevPacket;
+        if (data[REQUEST_POS] == REQUEST){
+            for (int i = 0; i < packetsSent.size(); i++){
+                try {
+                    prevPacket = packetsSent.get(i);
+                    prevPacket.getData()[TYPE_OF_PACKET_POS] = SENDING_ALL_PUBLICATIONS;
+                    socket.send(packetsSent.get(i));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        else {
+            String content = new String(data);
+            System.out.println(content);
+            System.out.println("type another message");
+        }
     }
 
     @Override
     public void userInput(String message) {
         byte[] topicBytes = topic.getBytes();
         byte[] msgBytes = message.getBytes();
-        byte[] buffer = new byte[TOPIC_LENGTH_POS + 1 + msgBytes.length + topicBytes.length + 1];
+        byte[] buffer = new byte[DATA_BEGIN_POS + msgBytes.length + topicBytes.length + 1];
         buffer[TOPIC_LENGTH_POS] = (byte) topicBytes.length;
         buffer[MSG_LENGTH_POS] = (byte) msgBytes.length;
-        buffer[TYPE_OF_PACKET_POS] = (byte) 1;
+        buffer[TYPE_OF_PACKET_POS] = (byte) TYPE_OF_PACKET;
         for (int i = 0; i < topicBytes.length; i++) {
-            buffer[TOPIC_LENGTH_POS + 1 + i + 1] = topicBytes[i];
+            buffer[DATA_BEGIN_POS + i + 1] = topicBytes[i];
         }
         for (int i = 0; i < msgBytes.length; i++) {
-            buffer[MSG_LENGTH_POS + topicBytes.length + 1 + i] = msgBytes[i];
+            buffer[DATA_BEGIN_POS + topicBytes.length + 1 + i] = msgBytes[i];
         }
         System.out.println("Sending packet...");
         DatagramPacket packet = new DatagramPacket(buffer, buffer.length, dstAddress);
         try {
+            packetsSent.add(packet);
             socket.send(packet);
             System.out.println("Packet sent");
         } catch (IOException e) {
@@ -71,15 +93,15 @@ public class Publisher extends Node implements Runnable {
         DatagramPacket packet;
         byte[] msgBytes = message.getBytes();
         byte[] topicBytes = topic.getBytes();
-        byte[] buffer = new byte[1 + 1 + msgBytes.length + topicBytes.length + 1];
+        byte[] buffer = new byte[DATA_BEGIN_POS + msgBytes.length + topicBytes.length + 1];
         buffer[TOPIC_LENGTH_POS] = (byte) topicBytes.length;
         buffer[MSG_LENGTH_POS] = (byte) msgBytes.length;
-        buffer[TYPE_OF_PACKET_POS] = (byte) 1;
+        buffer[TYPE_OF_PACKET_POS] = (byte) TYPE_OF_PACKET;
         for (int i = 0; i < topicBytes.length; i++) {
-            buffer[TOPIC_LENGTH_POS + 1 + i + 1] = topicBytes[i];
+            buffer[DATA_BEGIN_POS + i + 1] = topicBytes[i];
         }
         for (int i = 0; i < msgBytes.length; i++) {
-            buffer[MSG_LENGTH_POS + topicBytes.length + 1 + i] = msgBytes[i];
+            buffer[DATA_BEGIN_POS + topicBytes.length + 1 + i] = msgBytes[i];
         }
         System.out.println("Sending packet...");
         packet = new DatagramPacket(buffer, buffer.length, dstAddress);

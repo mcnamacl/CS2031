@@ -10,8 +10,15 @@ public class Broker extends Node {
     static final int TYPE_OF_PACKET_POS = 0;
     static final int TOPIC_LENGTH_POS = 1;
     static final int MSG_LENGTH_POS = 2;
+    static final int SEND_ALL_PUBLICATIONS_POS = 3;
+    static final int DATA_BEGIN_POS = 10;
+
+    static final int SEND_ALL_PUBLICATIONS = 3;
 
     HashMap<String, List<SocketAddress>> subscriberList = new HashMap<>();
+    HashMap<String, List<SocketAddress>> publisherList = new HashMap<>();
+
+    SocketAddress newestSub;
 
     Broker(int port) {
         try {
@@ -31,7 +38,7 @@ public class Broker extends Node {
             switch (data[TYPE_OF_PACKET_POS]) {
                 case 0: //Subscription
                     for (int i = 0; i < topicBuffer.length; i++) {
-                        topicBuffer[i] = data[TOPIC_LENGTH_POS + i + 1];
+                        topicBuffer[i] = data[DATA_BEGIN_POS + i + 1];
                     }
                     topic = new String(topicBuffer);
                     handleSubscription(packet, topic);
@@ -40,28 +47,51 @@ public class Broker extends Node {
                     break;
                 case 1: //Publication
                     for (int i = 0; i < topicBuffer.length; i++) {
-                        topicBuffer[i] = data[MSG_LENGTH_POS + i + 1];
+                        topicBuffer[i] = data[DATA_BEGIN_POS + i + 1];
                     }
                     topic = new String(topicBuffer);
                     byte[] msgBuffer = new byte[data[MSG_LENGTH_POS]];
                     for (int i = 0; i < msgBuffer.length; i++) {
-                        msgBuffer[i] = data[MSG_LENGTH_POS + topicBuffer.length + i + 1];
+                        msgBuffer[i] = data[DATA_BEGIN_POS + topicBuffer.length + i + 1];
                     }
-                    handlePublication(topic, msgBuffer);
+                    handlePublication(packet, topic, msgBuffer);
                     System.out.println("New publication to " + topic);
                     receivedCorrectly = true;
                     break;
-                case 3: //unsub
+                case 2: //unsub
                     for (int i = 0; i < topicBuffer.length; i++) {
-                        topicBuffer[i] = data[TOPIC_LENGTH_POS + i + 1];
+                        topicBuffer[i] = data[DATA_BEGIN_POS + i + 1];
                     }
                     topic = new String(topicBuffer);
                     List<SocketAddress> currentTopicSubs = subscriberList.get(topic);
                     for (int i = 0; i < currentTopicSubs.size(); i++) {
                         if (currentTopicSubs.get(i).equals(packet.getSocketAddress())) {
                             currentTopicSubs.remove(currentTopicSubs.get(i));
+                            break;
                         }
                     }
+                    receivedCorrectly = true;
+                    break;
+                case 3:
+                    for (int i = 0; i < topicBuffer.length; i++) {
+                        topicBuffer[i] = data[DATA_BEGIN_POS + i + 1];
+                    }
+                    topic = new String(topicBuffer);
+                    msgBuffer = new byte[data[MSG_LENGTH_POS]];
+                    for (int i = 0; i < msgBuffer.length; i++) {
+                        msgBuffer[i] = data[DATA_BEGIN_POS + topicBuffer.length + i + 1];
+                    }
+                    byte[] topicToSend = (topic + ": ").getBytes();
+                    byte[] messageToSend = new byte[topicToSend.length + msgBuffer.length];
+                    for (int i = 0; i < topicToSend.length; i++) {
+                        messageToSend[i] = topicToSend[i];
+                    }
+                    for (int i = 0; i < msgBuffer.length; i++) {
+                        messageToSend[topicToSend.length + i] = msgBuffer[i];
+                    }
+                    DatagramPacket messagePacket = new DatagramPacket(messageToSend, messageToSend.length);
+                    messagePacket.setSocketAddress(newestSub);
+                    socket.send(messagePacket);
                     receivedCorrectly = true;
                     break;
             }
@@ -92,7 +122,8 @@ public class Broker extends Node {
 
     }
 
-    public void handleSubscription(DatagramPacket packet, String topic) {
+    public void handleSubscription(DatagramPacket packet, String topic) throws IOException {
+        newestSub = packet.getSocketAddress();
         if (!subscriberList.containsKey(topic)) {
             List<SocketAddress> subscriber = new ArrayList<>();
             subscriber.add(packet.getSocketAddress());
@@ -102,9 +133,29 @@ public class Broker extends Node {
             tmpList.add(packet.getSocketAddress());
             subscriberList.put(topic, tmpList);
         }
+        if (publisherList.containsKey(topic)){
+            List<SocketAddress> tmpList = publisherList.get(topic);
+            byte[] toSend = new byte[4];
+            toSend[SEND_ALL_PUBLICATIONS_POS] = SEND_ALL_PUBLICATIONS;
+            DatagramPacket requestingAllPublications = new DatagramPacket(toSend, toSend.length);
+            for (int i = 0; i < tmpList.size(); i++){
+                requestingAllPublications.setSocketAddress(tmpList.get(i));
+                socket.send(requestingAllPublications);
+            }
+        }
     }
 
-    public void handlePublication(String topic, byte[] message) throws IOException {
+    public void handlePublication(DatagramPacket packet, String topic, byte[] message) throws IOException {
+        if (!publisherList.containsKey(topic)){
+            List<SocketAddress> publisher = new ArrayList<>();
+            publisher.add(packet.getSocketAddress());
+            publisherList.put(topic, publisher);
+        }
+        else if (!publisherList.containsValue(packet.getSocketAddress())) {
+            List<SocketAddress> tmpList = publisherList.get(topic);
+            tmpList.add(packet.getSocketAddress());
+            publisherList.put(topic, tmpList);
+        }
         if (subscriberList.get(topic) != null) {
             byte[] topicToSend = (topic + ": ").getBytes();
             byte[] messageToSend = new byte[topicToSend.length + message.length];

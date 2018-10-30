@@ -13,8 +13,10 @@ public class Subscriber extends Node implements Runnable {
     static final int TYPE_OF_PACKET_POS = 0;
     static final int TOPIC_LENGTH_POS = 1;
 
-    static final int UN_SUB = 3;
+    static final int UN_SUB = 2;
     static final int SUB = 0;
+
+    static final int DATA_BEGIN_POS = 10;
 
     List<String> topics = new ArrayList<>();
     InetSocketAddress dstAddress;
@@ -76,7 +78,7 @@ public class Subscriber extends Node implements Runnable {
             unSub[TOPIC_LENGTH_POS] = (byte) topicBytes.length;
             unSub[TYPE_OF_PACKET_POS] = UN_SUB;
             for (int i = 0; i < topicBytes.length; i++) {
-                unSub[TOPIC_LENGTH_POS + i + 1] = topicBytes[i];
+                unSub[DATA_BEGIN_POS + i + 1] = topicBytes[i];
             }
             DatagramPacket packet = new DatagramPacket(unSub, unSub.length, dstAddress);
             socket.send(packet);
@@ -94,11 +96,11 @@ public class Subscriber extends Node implements Runnable {
 
     public void subToNewTopic(byte[] topicBytes) {
         topics.add(new String(topicBytes));
-        byte[] buffer = new byte[TOPIC_LENGTH_POS + topicBytes.length + 1];
+        byte[] buffer = new byte[DATA_BEGIN_POS + topicBytes.length + 1];
         buffer[TYPE_OF_PACKET_POS] = (byte) SUB;
         buffer[TOPIC_LENGTH_POS] = (byte) topicBytes.length;
         for (int i = 0; i < topicBytes.length; i++) {
-            buffer[TOPIC_LENGTH_POS + i + 1] = topicBytes[i];
+            buffer[DATA_BEGIN_POS + i + 1] = topicBytes[i];
         }
         System.out.println("Sending packet...");
         DatagramPacket packet = new DatagramPacket(buffer, buffer.length, dstAddress);
@@ -113,11 +115,11 @@ public class Subscriber extends Node implements Runnable {
     public synchronized void run() {
         DatagramPacket packet;
         byte[] topicBytes = topics.get(0).getBytes();
-        byte[] buffer = new byte[TOPIC_LENGTH_POS + topicBytes.length + 1];
+        byte[] buffer = new byte[DATA_BEGIN_POS + topicBytes.length + 1];
         buffer[TYPE_OF_PACKET_POS] = (byte) SUB;
         buffer[TOPIC_LENGTH_POS] = (byte) topicBytes.length;
         for (int i = 0; i < topicBytes.length; i++) {
-            buffer[TOPIC_LENGTH_POS + i + 1] = topicBytes[i];
+            buffer[DATA_BEGIN_POS + i + 1] = topicBytes[i];
         }
         System.out.println("Sending packet...");
         packet = new DatagramPacket(buffer, buffer.length, dstAddress);
