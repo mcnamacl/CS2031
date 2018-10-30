@@ -101,7 +101,7 @@ public class Subscriber extends Node implements Runnable {
             e.printStackTrace();
         }
         System.out.println("you have unsubscribed from " + topic + " if you would like to end all subscriptions " +
-                " type end else just click enter");
+                " type end else press 0");
         Scanner scanner = new Scanner(System.in);
         if (scanner.hasNext("end")) {
             ended = true;

@@ -96,7 +96,6 @@ public class Publisher extends Node implements Runnable {
         System.out.println("Sending packet...");
         packet = new DatagramPacket(buffer, buffer.length, dstAddress);
         try {
-            System.out.println(new String(buffer));
             socket.send(packet);
             System.out.println("Packet sent");
             this.wait();
