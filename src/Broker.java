@@ -10,13 +10,12 @@ public class Broker extends Node {
     static final int TYPE_OF_PACKET_POS = 0;
     static final int TOPIC_LENGTH_POS = 1;
     static final int MSG_LENGTH_POS = 2;
-    static final int SEND_ALL_PUBLICATIONS_POS = 3;
     static final int PUBLISHER_NUMBER_POS = 4;
     static final int PRIORITY_POS = 5;
     static final int DATA_BEGIN_POS = 10;
 
     static final int SUB = 0;
-    static final int SENDING_MULTIPLE_PACKETS = 6;
+    static final int SENDING_MULTIPLE_PACKETS = 5;
     static final int SEND_ALL_PUBLICATIONS = 3;
 
     HashMap<String, List<SocketAddress>> subscriberList = new HashMap<>();
@@ -39,7 +38,6 @@ public class Broker extends Node {
             byte[] data = packet.getData();
             byte[] topicBuffer = new byte[data[TOPIC_LENGTH_POS]];
             boolean receivedCorrectly = false;
-            boolean sendingResponse = false;
             String topic;
             switch (data[TYPE_OF_PACKET_POS]) {
                 case 0: //Subscription
@@ -166,7 +164,7 @@ public class Broker extends Node {
         if (publisherList.containsKey(topic)){
             List<SocketAddress> tmpList = publisherList.get(topic);
             byte[] toSend = new byte[6];
-            toSend[SEND_ALL_PUBLICATIONS_POS] = SEND_ALL_PUBLICATIONS;
+            toSend[TYPE_OF_PACKET_POS] = SEND_ALL_PUBLICATIONS;
             DatagramPacket requestingAllPublications;
             numOfPublishersWaitingFrom = tmpList.size();
             for (int i = 0; i < tmpList.size(); i++){

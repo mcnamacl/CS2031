@@ -19,7 +19,6 @@ public class Publisher extends Node implements Runnable {
     static final int TYPE_OF_PACKET_POS = 0;
     static final int TOPIC_LENGTH_POS = 1;
     static final int MSG_LENGTH_POS = 2;
-    static final int REQUEST_POS = 3;
     static final int PUBLISHER_NUMBER_POS = 4;
     static final int PRIORITY_POS = 5;
 
@@ -51,7 +50,7 @@ public class Publisher extends Node implements Runnable {
         byte[] data;
         data = packet.getData();
         DatagramPacket prevPacket;
-        if (data[REQUEST_POS] == REQUEST){
+        if (data[TYPE_OF_PACKET_POS] == REQUEST){
             requested = true;
             System.out.println("Sending all previous packets to a new subscriber to the topic " + topic);
             for (int i = 0; i < packetsSent.size(); i++){

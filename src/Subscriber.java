@@ -17,7 +17,7 @@ public class Subscriber extends Node implements Runnable {
     static final int PRIORITY_POS = 5;
     static final int DATA_BEGIN_POS = 10;
 
-    static final int SENDING_MULTIPLE_PACKETS = 6;
+    static final int SENDING_MULTIPLE_PACKETS = 5;
     static final int FINISHED_SENDING_ALL_PACKETS = 4;
     static final int UN_SUB = 2;
     static final int SUB = 0;
@@ -74,6 +74,7 @@ public class Subscriber extends Node implements Runnable {
                 String content = new String(message);
                 System.out.println(content);
             }
+            packetsReceived = null;
         }
         else if (data[TYPE_OF_PACKET_POS] == SUB){
             byte[] contentToBePrinted = new byte[data.length - DATA_BEGIN_POS];
