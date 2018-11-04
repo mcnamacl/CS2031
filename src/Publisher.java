@@ -20,12 +20,17 @@ public class Publisher extends Node implements Runnable {
     static final int TOPIC_LENGTH_POS = 1;
     static final int MSG_LENGTH_POS = 2;
     static final int REQUEST_POS = 3;
+    static final int PUBLISHER_NUMBER_POS = 4;
+    static final int PRIORITY_POS = 5;
 
     static final int DATA_BEGIN_POS = 10;
 
     static final int TYPE_OF_PACKET = 1;
     static final int SENDING_ALL_PUBLICATIONS = 3;
     static final int REQUEST = 3;
+    static final int FINISHED_SENDING_ALL_PACKETS = 4;
+
+    boolean requested = false;
 
     List<DatagramPacket> packetsSent = new ArrayList<>();
 
@@ -47,18 +52,37 @@ public class Publisher extends Node implements Runnable {
         data = packet.getData();
         DatagramPacket prevPacket;
         if (data[REQUEST_POS] == REQUEST){
+            requested = true;
+            System.out.println("Sending all previous packets to a new subscriber to the topic " + topic);
             for (int i = 0; i < packetsSent.size(); i++){
                 try {
                     prevPacket = packetsSent.get(i);
                     prevPacket.getData()[TYPE_OF_PACKET_POS] = SENDING_ALL_PUBLICATIONS;
+                    prevPacket.getData()[PUBLISHER_NUMBER_POS] = packet.getData()[PUBLISHER_NUMBER_POS];
+                    prevPacket.getData()[PRIORITY_POS] = (byte) i;
                     socket.send(packetsSent.get(i));
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
+            byte[] buffer = new byte[1];
+            buffer[TYPE_OF_PACKET_POS] = (byte) FINISHED_SENDING_ALL_PACKETS;
+            DatagramPacket packetFinished = new DatagramPacket(buffer, buffer.length, dstAddress);
+            try {
+                socket.send(packetFinished);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
-        else {
-            String content = new String(data);
+        else if (data[TYPE_OF_PACKET_POS] == FINISHED_SENDING_ALL_PACKETS) {
+            requested = false;
+        }
+        else if (!requested){
+            byte[] messageReceived = new byte[data.length - DATA_BEGIN_POS];
+            for (int i = 0; i < messageReceived.length; i++){
+                messageReceived[i] = data[i + DATA_BEGIN_POS];
+            }
+            String content = new String(messageReceived);
             System.out.println(content);
             System.out.println("type another message");
         }

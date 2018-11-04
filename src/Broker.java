@@ -11,14 +11,19 @@ public class Broker extends Node {
     static final int TOPIC_LENGTH_POS = 1;
     static final int MSG_LENGTH_POS = 2;
     static final int SEND_ALL_PUBLICATIONS_POS = 3;
+    static final int PUBLISHER_NUMBER_POS = 4;
+    static final int PRIORITY_POS = 5;
     static final int DATA_BEGIN_POS = 10;
 
+    static final int SUB = 0;
+    static final int SENDING_MULTIPLE_PACKETS = 6;
     static final int SEND_ALL_PUBLICATIONS = 3;
 
     HashMap<String, List<SocketAddress>> subscriberList = new HashMap<>();
     HashMap<String, List<SocketAddress>> publisherList = new HashMap<>();
 
     SocketAddress newestSub;
+    int numOfPublishersWaitingFrom = 0;
 
     Broker(int port) {
         try {
@@ -34,6 +39,7 @@ public class Broker extends Node {
             byte[] data = packet.getData();
             byte[] topicBuffer = new byte[data[TOPIC_LENGTH_POS]];
             boolean receivedCorrectly = false;
+            boolean sendingResponse = false;
             String topic;
             switch (data[TYPE_OF_PACKET_POS]) {
                 case 0: //Subscription
@@ -72,7 +78,7 @@ public class Broker extends Node {
                     }
                     receivedCorrectly = true;
                     break;
-                case 3:
+                case 3: //request for all previous packets sent to a topic
                     for (int i = 0; i < topicBuffer.length; i++) {
                         topicBuffer[i] = data[DATA_BEGIN_POS + i + 1];
                     }
@@ -82,16 +88,32 @@ public class Broker extends Node {
                         msgBuffer[i] = data[DATA_BEGIN_POS + topicBuffer.length + i + 1];
                     }
                     byte[] topicToSend = (topic + ": ").getBytes();
-                    byte[] messageToSend = new byte[topicToSend.length + msgBuffer.length];
+                    byte[] messageToSend = new byte[DATA_BEGIN_POS + topicToSend.length + msgBuffer.length];
+                    messageToSend[PUBLISHER_NUMBER_POS] = data[PUBLISHER_NUMBER_POS];
+                    messageToSend[PRIORITY_POS] = data[PRIORITY_POS];
+                    messageToSend[TYPE_OF_PACKET_POS] = SENDING_MULTIPLE_PACKETS;
                     for (int i = 0; i < topicToSend.length; i++) {
-                        messageToSend[i] = topicToSend[i];
+                        messageToSend[i + DATA_BEGIN_POS] = topicToSend[i];
                     }
                     for (int i = 0; i < msgBuffer.length; i++) {
-                        messageToSend[topicToSend.length + i] = msgBuffer[i];
+                        messageToSend[topicToSend.length + i + DATA_BEGIN_POS] = msgBuffer[i];
                     }
                     DatagramPacket messagePacket = new DatagramPacket(messageToSend, messageToSend.length);
                     messagePacket.setSocketAddress(newestSub);
                     socket.send(messagePacket);
+                    receivedCorrectly = true;
+                    break;
+                case 4: //sends a confirmation to the publisher and subscriber that multiple packets have been received
+                    byte[] res = new byte[1];
+                    res[TYPE_OF_PACKET_POS] = (byte) 4;
+                    DatagramPacket response = new DatagramPacket(res, res.length);
+                    response.setSocketAddress(packet.getSocketAddress());
+                    socket.send(response);
+                    numOfPublishersWaitingFrom--;
+                    if (numOfPublishersWaitingFrom == 0) {
+                        response.setSocketAddress(newestSub);
+                        socket.send(response);
+                    }
                     receivedCorrectly = true;
                     break;
             }
@@ -100,7 +122,11 @@ public class Broker extends Node {
                 byte[] res;
                 String ack = "ok";
                 res = ack.getBytes();
-                response = new DatagramPacket(res, res.length);
+                byte[] resFinal = new byte[res.length + DATA_BEGIN_POS];
+                for (int i = 0; i < res.length; i++){
+                    resFinal[DATA_BEGIN_POS + i] = res[i];
+                }
+                response = new DatagramPacket(resFinal, resFinal.length);
                 response.setSocketAddress(packet.getSocketAddress());
                 socket.send(response);
             } else {
@@ -108,7 +134,11 @@ public class Broker extends Node {
                 byte[] res;
                 String ack = "Did not receive packet correctly";
                 res = ack.getBytes();
-                response = new DatagramPacket(res, res.length);
+                byte[] resFinal = new byte[res.length + DATA_BEGIN_POS];
+                for (int i = 0; i < res.length + DATA_BEGIN_POS; i++){
+                    resFinal[DATA_BEGIN_POS + i] = res[i];
+                }
+                response = new DatagramPacket(resFinal, resFinal.length);
                 response.setSocketAddress(packet.getSocketAddress());
                 socket.send(response);
             }
@@ -135,10 +165,13 @@ public class Broker extends Node {
         }
         if (publisherList.containsKey(topic)){
             List<SocketAddress> tmpList = publisherList.get(topic);
-            byte[] toSend = new byte[4];
+            byte[] toSend = new byte[6];
             toSend[SEND_ALL_PUBLICATIONS_POS] = SEND_ALL_PUBLICATIONS;
-            DatagramPacket requestingAllPublications = new DatagramPacket(toSend, toSend.length);
+            DatagramPacket requestingAllPublications;
+            numOfPublishersWaitingFrom = tmpList.size();
             for (int i = 0; i < tmpList.size(); i++){
+                toSend[PUBLISHER_NUMBER_POS] = (byte) i;
+                requestingAllPublications = new DatagramPacket(toSend, toSend.length);
                 requestingAllPublications.setSocketAddress(tmpList.get(i));
                 socket.send(requestingAllPublications);
             }
@@ -151,19 +184,20 @@ public class Broker extends Node {
             publisher.add(packet.getSocketAddress());
             publisherList.put(topic, publisher);
         }
-        else if (!publisherList.containsValue(packet.getSocketAddress())) {
+        else if (!publisherList.get(topic).contains(packet.getSocketAddress())) {
             List<SocketAddress> tmpList = publisherList.get(topic);
             tmpList.add(packet.getSocketAddress());
             publisherList.put(topic, tmpList);
         }
         if (subscriberList.get(topic) != null) {
             byte[] topicToSend = (topic + ": ").getBytes();
-            byte[] messageToSend = new byte[topicToSend.length + message.length];
+            byte[] messageToSend = new byte[DATA_BEGIN_POS + topicToSend.length + message.length];
+            messageToSend[TYPE_OF_PACKET_POS] = SUB;
             for (int i = 0; i < topicToSend.length; i++) {
-                messageToSend[i] = topicToSend[i];
+                messageToSend[i + DATA_BEGIN_POS] = topicToSend[i];
             }
             for (int i = 0; i < message.length; i++) {
-                messageToSend[topicToSend.length + i] = message[i];
+                messageToSend[DATA_BEGIN_POS + topicToSend.length + i] = message[i];
             }
             DatagramPacket messagePacket = new DatagramPacket(messageToSend, messageToSend.length);
             List<SocketAddress> subscribers = subscriberList.get(topic);

@@ -1,3 +1,4 @@
+import javax.xml.crypto.Data;
 import java.io.IOException;
 import java.net.BindException;
 import java.net.DatagramSocket;
@@ -12,13 +13,17 @@ public class Subscriber extends Node implements Runnable {
 
     static final int TYPE_OF_PACKET_POS = 0;
     static final int TOPIC_LENGTH_POS = 1;
+    static final int PUBLISHER_NUMBER_POS = 4;
+    static final int PRIORITY_POS = 5;
+    static final int DATA_BEGIN_POS = 10;
 
+    static final int SENDING_MULTIPLE_PACKETS = 6;
+    static final int FINISHED_SENDING_ALL_PACKETS = 4;
     static final int UN_SUB = 2;
     static final int SUB = 0;
 
-    static final int DATA_BEGIN_POS = 10;
-
     List<String> topics = new ArrayList<>();
+    HashMap<Integer, List<DatagramPacket>> packetsReceived = new HashMap<>();
     InetSocketAddress dstAddress;
     boolean ended = false;
 
@@ -37,8 +42,47 @@ public class Subscriber extends Node implements Runnable {
     public synchronized void onReceipt(DatagramPacket packet) {
         byte[] data;
         data = packet.getData();
-        String content = new String(data);
-        System.out.println(content);
+        if (data[TYPE_OF_PACKET_POS] == SENDING_MULTIPLE_PACKETS && !packetsReceived.containsKey(Integer.valueOf(data[PUBLISHER_NUMBER_POS]))){
+            List<DatagramPacket> list = new ArrayList<>();
+            list.add(packet);
+            packetsReceived.put(Integer.valueOf(data[PUBLISHER_NUMBER_POS]), list);
+        }
+        else if (data[TYPE_OF_PACKET_POS] == SENDING_MULTIPLE_PACKETS && packetsReceived.containsKey(Integer.valueOf(data[PUBLISHER_NUMBER_POS]))){
+            List<DatagramPacket> list = packetsReceived.get(Integer.valueOf(data[PUBLISHER_NUMBER_POS]));
+            list.add(packet);
+            packetsReceived.put((Integer.valueOf(data[PUBLISHER_NUMBER_POS])), list);
+        }
+        if (packet.getData()[TYPE_OF_PACKET_POS]==FINISHED_SENDING_ALL_PACKETS){
+            int amountOfPacketsReceived = 0;
+            for (int count = 0; count < packetsReceived.size(); count++){
+                amountOfPacketsReceived = amountOfPacketsReceived + packetsReceived.get(count).size();
+            }
+            DatagramPacket[] packets = new DatagramPacket[amountOfPacketsReceived];
+            int lastSize = 0;
+            for (int i = 0; i < packetsReceived.size(); i++){
+                List<DatagramPacket> list = packetsReceived.get(i);
+                for (int j = 0; j < list.size(); j++){
+                    packets[list.get(j).getData()[PRIORITY_POS] + lastSize] = list.get(j);
+                }
+                lastSize = list.size() + lastSize;
+            }
+            for (int k = 0 ; k < packets.length; k++){
+                byte[] message = new byte[packets[k].getData().length - DATA_BEGIN_POS];
+                for (int j = 0 ; j < message.length; j++){
+                    message[j] = packets[k].getData()[DATA_BEGIN_POS + j];
+                }
+                String content = new String(message);
+                System.out.println(content);
+            }
+        }
+        else if (data[TYPE_OF_PACKET_POS] == SUB){
+            byte[] contentToBePrinted = new byte[data.length - DATA_BEGIN_POS];
+            for (int i = 0; i < contentToBePrinted.length; i++){
+                contentToBePrinted[i] = data[i + DATA_BEGIN_POS];
+            }
+            String content = new String(contentToBePrinted);
+            System.out.println(content);
+        }
     }
 
     @Override
